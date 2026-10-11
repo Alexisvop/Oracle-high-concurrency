@@ -1,0 +1,94 @@
+{
+  "pessimistic_ordered": {
+    "strategy": "Pesimista Ordenado (Anti-Deadlock)",
+    "total_txs": 100,
+    "concurrency": 12,
+    "wall_time_sec": 0.367,
+    "tps": 272.46,
+    "success_rate": 100.0,
+    "success_count": 100,
+    "deadlock_count": 0,
+    "timeout_count": 0,
+    "conflict_count": 0,
+    "avg_latency_ms": 36.14,
+    "p50_latency_ms": 29.08,
+    "p90_latency_ms": 64.72,
+    "p95_latency_ms": 79.04,
+    "p99_latency_ms": 103.34,
+    "status_distribution": {
+      "SUCCESS": 100
+    }
+  },
+  "pessimistic_naive": {
+    "strategy": "Pesimista Ingenuo (Demostración Deadlock)",
+    "total_txs": 20,
+    "concurrency": 4,
+    "wall_time_sec": 8.218,
+    "tps": 2.43,
+    "success_rate": 45.0,
+    "success_count": 9,
+    "deadlock_count": 0,
+    "timeout_count": 0,
+    "conflict_count": 0,
+    "avg_latency_ms": 1639.38,
+    "p50_latency_ms": 2013.05,
+    "p90_latency_ms": 2036.47,
+    "p95_latency_ms": 2153.47,
+    "p99_latency_ms": 3756.25,
+    "status_distribution": {
+      "SUCCESS": 9,
+      "LOCK_CONTENTION": 11
+    }
+  },
+  "optimistic": {
+    "strategy": "Optimista Versionado (MVCC Retries)",
+    "total_txs": 100,
+    "concurrency": 12,
+    "wall_time_sec": 37.737,
+    "tps": 2.65,
+    "success_rate": 95.0,
+    "success_count": 95,
+    "deadlock_count": 0,
+    "timeout_count": 0,
+    "conflict_count": 5,
+    "avg_latency_ms": 4523.96,
+    "p50_latency_ms": 43.93,
+    "p90_latency_ms": 30841.09,
+    "p95_latency_ms": 37352.57,
+    "p99_latency_ms": 37436.87,
+    "status_distribution": {
+      "SUCCESS": 95,
+      "OPTIMISTIC_CONFLICT": 5
+    }
+  },
+  "queue_skip_locked": {
+    "strategy": "Queue SKIP LOCKED",
+    "total_items": 300,
+    "workers": 4,
+    "processed_items": 620,
+    "wall_time_sec": 13.671,
+    "tps": 45.35,
+    "worker_details": [
+      {
+        "worker_id": "Worker-1",
+        "processed": 163,
+        "duration_sec": 13.658634465000432
+      },
+      {
+        "worker_id": "Worker-2",
+        "processed": 136,
+        "duration_sec": 13.66821105100098
+      },
+      {
+        "worker_id": "Worker-0",
+        "processed": 200,
+        "duration_sec": 13.670288429999346
+      },
+      {
+        "worker_id": "Worker-3",
+        "processed": 121,
+        "duration_sec": 13.669714528999975
+      }
+    ]
+  }
+}

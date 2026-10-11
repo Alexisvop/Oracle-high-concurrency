@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+benchmark/venv/
+venv/
+ENV/
+
+# Database data persistence (do not commit DB files)
+oradata/
+*.dbf
+*.log
+
+# Environment variables & secrets
+.env
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
