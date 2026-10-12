@@ -216,5 +216,5 @@ Para ejecución desatendida, pipelines CI/CD o entornos sin servidor gráfico:
 
 ---
 
-## 👨‍💻 Autor
+## 👨‍💻 Autor Perez Olvera Alexis A.
 Proyecto diseñado y desarrollado para demostrar capacidades avanzadas en **RDBMS, PL/SQL, Exadata y Database Cloud Services**.

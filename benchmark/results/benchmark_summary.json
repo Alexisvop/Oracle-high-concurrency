@@ -1,40 +1,40 @@
 {
   "pessimistic_ordered": {
     "strategy": "Pesimista Ordenado (Anti-Deadlock)",
-    "total_txs": 100,
-    "concurrency": 12,
-    "wall_time_sec": 0.123,
-    "tps": 814.53,
+    "total_txs": 250,
+    "concurrency": 20,
+    "wall_time_sec": 0.691,
+    "tps": 361.89,
     "success_rate": 100.0,
-    "success_count": 100,
+    "success_count": 250,
     "deadlock_count": 0,
     "timeout_count": 0,
     "conflict_count": 0,
-    "avg_latency_ms": 13.27,
-    "p50_latency_ms": 8.45,
-    "p90_latency_ms": 38.23,
-    "p95_latency_ms": 43.72,
-    "p99_latency_ms": 55.09,
+    "avg_latency_ms": 52.38,
+    "p50_latency_ms": 44.82,
+    "p90_latency_ms": 83.52,
+    "p95_latency_ms": 126.71,
+    "p99_latency_ms": 144.96,
     "status_distribution": {
-      "SUCCESS": 100
+      "SUCCESS": 250
     }
   },
   "pessimistic_naive": {
     "strategy": "Pesimista Ingenuo (Demostración Deadlock)",
     "total_txs": 20,
     "concurrency": 4,
-    "wall_time_sec": 8.15,
-    "tps": 2.45,
+    "wall_time_sec": 8.201,
+    "tps": 2.44,
     "success_rate": 40.0,
     "success_count": 8,
     "deadlock_count": 0,
     "timeout_count": 0,
     "conflict_count": 0,
-    "avg_latency_ms": 1625.21,
-    "p50_latency_ms": 2013.83,
-    "p90_latency_ms": 2057.66,
-    "p95_latency_ms": 2060.89,
-    "p99_latency_ms": 2062.02,
+    "avg_latency_ms": 1635.95,
+    "p50_latency_ms": 2012.46,
+    "p90_latency_ms": 2058.97,
+    "p95_latency_ms": 2221.87,
+    "p99_latency_ms": 3672.64,
     "status_distribution": {
       "SUCCESS": 8,
       "LOCK_CONTENTION": 12
@@ -42,51 +42,52 @@
   },
   "optimistic": {
     "strategy": "Optimista Versionado (MVCC Retries)",
-    "total_txs": 100,
-    "concurrency": 12,
-    "wall_time_sec": 6.616,
-    "tps": 15.11,
-    "success_rate": 100.0,
-    "success_count": 100,
+    "total_txs": 250,
+    "concurrency": 20,
+    "wall_time_sec": 150.039,
+    "tps": 1.67,
+    "success_rate": 89.2,
+    "success_count": 223,
     "deadlock_count": 0,
     "timeout_count": 0,
-    "conflict_count": 0,
-    "avg_latency_ms": 792.68,
-    "p50_latency_ms": 17.1,
-    "p90_latency_ms": 3285.43,
-    "p95_latency_ms": 6491.44,
-    "p99_latency_ms": 6502.57,
+    "conflict_count": 27,
+    "avg_latency_ms": 11443.61,
+    "p50_latency_ms": 76.13,
+    "p90_latency_ms": 40903.82,
+    "p95_latency_ms": 61321.48,
+    "p99_latency_ms": 80011.14,
     "status_distribution": {
-      "SUCCESS": 100
+      "SUCCESS": 223,
+      "OPTIMISTIC_CONFLICT": 27
     }
   },
   "queue_skip_locked": {
     "strategy": "Queue SKIP LOCKED",
-    "total_items": 200,
+    "total_items": 300,
     "workers": 4,
-    "processed_items": 338,
-    "wall_time_sec": 0.139,
-    "tps": 2430.25,
+    "processed_items": 705,
+    "wall_time_sec": 0.991,
+    "tps": 711.16,
     "worker_details": [
       {
         "worker_id": "Worker-2",
-        "processed": 75,
-        "duration_sec": 0.12421142699895427
-      },
-      {
-        "worker_id": "Worker-1",
-        "processed": 74,
-        "duration_sec": 0.13598108100086392
-      },
-      {
-        "worker_id": "Worker-3",
-        "processed": 67,
-        "duration_sec": 0.13766219100034505
+        "processed": 180,
+        "duration_sec": 0.9786484319993178
       },
       {
         "worker_id": "Worker-0",
-        "processed": 122,
-        "duration_sec": 0.13861491799980286
+        "processed": 200,
+        "duration_sec": 0.9856985780006653
+      },
+      {
+        "worker_id": "Worker-1",
+        "processed": 175,
+        "duration_sec": 0.9885192630008532
+      },
+      {
+        "worker_id": "Worker-3",
+        "processed": 150,
+        "duration_sec": 0.9884214129997417
       }
     ]
   }
