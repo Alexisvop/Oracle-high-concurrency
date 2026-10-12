@@ -334,10 +334,13 @@
         <!-- Panel 4: Auditoría Persistente & Ledger en Vivo -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
           <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-1.5 flex-wrap gap-y-1">
               <button onclick="switchInspectorTab('txs')" id="tabBtnTxs" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white">Últimas Transacciones</button>
               <button onclick="switchInspectorTab('audit')" id="tabBtnAudit" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white">Auditoría Autónoma</button>
               <button onclick="switchInspectorTab('accounts')" id="tabBtnAccounts" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white">Cuentas</button>
+              <button onclick="switchInspectorTab('diagnostics')" id="tabBtnDiagnostics" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1">
+                <i data-lucide="activity" class="w-3 h-3 text-emerald-400"></i> Internals DBA (V$)
+              </button>
             </div>
             <button onclick="loadInspectorData()" class="text-slate-400 hover:text-white text-xs">
               <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
@@ -554,14 +557,18 @@
       const bTxs = document.getElementById('tabBtnTxs');
       const bAudit = document.getElementById('tabBtnAudit');
       const bAcc = document.getElementById('tabBtnAccounts');
+      const bDiag = document.getElementById('tabBtnDiagnostics');
 
-      bTxs.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
-      bAudit.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
-      bAcc.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
+      const defaultClass = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
+      bTxs.className = defaultClass;
+      bAudit.className = defaultClass;
+      bAcc.className = defaultClass;
+      if (bDiag) bDiag.className = defaultClass + " flex items-center gap-1";
 
       if (tab === 'txs') bTxs.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white";
       if (tab === 'audit') bAudit.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white";
       if (tab === 'accounts') bAcc.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white";
+      if (tab === 'diagnostics' && bDiag) bDiag.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-emerald-600 text-white flex items-center gap-1";
 
       loadInspectorData();
     }
@@ -646,9 +653,49 @@
           });
           html += `</tbody></table>`;
           container.innerHTML = html;
+
+        } else if (currentTab === 'diagnostics') {
+          const res = await fetch('/api/diagnostics');
+          const d = await res.json();
+          let html = `<div class="space-y-3 font-sans">
+            <!-- Cache Hit Ratio Banner -->
+            <div class="flex items-center justify-between p-2 rounded bg-slate-950 border border-slate-800">
+              <span class="text-xs text-slate-300 font-medium">Buffer Cache Hit Ratio (SGA):</span>
+              <span class="text-xs font-bold text-emerald-400 font-mono">${d.buffer_cache_hit_ratio}% (Gets: ${Number(d.consistent_gets + d.db_block_gets).toLocaleString()})</span>
+            </div>
+
+            <!-- Wait Events -->
+            <div>
+              <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Eventos de Espera Activos (V$SESSION):</p>
+              <div class="space-y-1">`;
+          (d.active_wait_events || []).forEach(w => {
+            const isContention = w.event.includes('lock') || w.event.includes('contention');
+            const cColor = isContention ? 'text-amber-400' : 'text-slate-300';
+            html += `<div class="flex justify-between text-[11px] px-2 py-1 rounded bg-slate-900 border border-slate-800/60 font-mono">
+              <span class="${cColor}">${w.event}</span>
+              <span class="text-slate-400">${w.session_count} ses</span>
+            </div>`;
+          });
+          html += `</div></div>
+
+            <!-- Top SQL by Buffer Gets -->
+            <div>
+              <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Top SQL por Buffer Gets (V$SQL):</p>
+              <div class="space-y-1 font-mono text-[10px]">`;
+          (d.top_sql || []).forEach(s => {
+            html += `<div class="p-1.5 rounded bg-slate-900 border border-slate-800/60">
+              <div class="flex justify-between text-sky-400 font-bold">
+                <span>SQL_ID: ${s.sql_id}</span>
+                <span class="text-slate-300">${Number(s.buffer_gets).toLocaleString()} gets (${s.executions} execs)</span>
+              </div>
+              <p class="text-slate-400 truncate mt-0.5" title="${s.snippet}">${s.snippet}</p>
+            </div>`;
+          });
+          html += `</div></div></div>`;
+          container.innerHTML = html;
         }
       } catch (e) {
-        container.innerHTML = `<p class="text-red-400 text-center py-4">Error cargando datos: ${e.message}</p>`;
+        container.innerHTML = `<p class="text-red-400 text-center py-4">Error cargando diagnósticos: ${e.message}</p>`;
       }
     }
   </script>

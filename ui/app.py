@@ -271,6 +271,67 @@ def get_accounts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/diagnostics", methods=["GET"])
+def get_diagnostics():
+    """Consulta métricas avanzadas de bajo nivel desde V$SYSSTAT, V$SESSION y V$SQL."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # 1. Buffer Cache Hit Ratio
+        cur.execute("""
+            SELECT name, value FROM v$sysstat 
+             WHERE name IN ('consistent gets from cache', 'db block gets from cache', 'physical reads cache')
+        """)
+        stats = dict(cur.fetchall())
+        gets = stats.get('consistent gets from cache', 0) + stats.get('db block gets from cache', 0)
+        reads = stats.get('physical reads cache', 0)
+        hit_ratio = round((1.0 - (reads / gets)) * 100.0, 2) if gets > 0 else 100.0
+
+        # 2. Eventos de espera activos en sesiones (Wait Events)
+        cur.execute("""
+            SELECT NVL(event, 'CPU/Running') AS event, 
+                   NVL(wait_class, 'Other') AS wait_class, 
+                   COUNT(*) AS session_count
+              FROM v$session
+             WHERE status = 'ACTIVE' AND type != 'BACKGROUND'
+             GROUP BY event, wait_class
+             ORDER BY session_count DESC
+            FETCH FIRST 6 ROWS ONLY
+        """)
+        wait_events = [{"event": r[0], "wait_class": r[1], "count": r[2]} for r in cur.fetchall()]
+
+        # 3. Top SQL por Buffer Gets
+        cur.execute("""
+            SELECT sql_id, executions, buffer_gets, disk_reads,
+                   ROUND(buffer_gets / GREATEST(executions, 1), 1) AS gets_per_exec,
+                   SUBSTR(sql_text, 1, 90) AS sql_snippet
+              FROM v$sql
+             WHERE executions > 0 AND parsing_schema_name = 'BANK_USER'
+             ORDER BY buffer_gets DESC
+            FETCH FIRST 6 ROWS ONLY
+        """)
+        top_sql = [{
+            "sql_id": r[0],
+            "executions": r[1],
+            "buffer_gets": r[2],
+            "disk_reads": r[3],
+            "gets_per_exec": float(r[4]),
+            "snippet": r[5]
+        } for r in cur.fetchall()]
+
+        conn.close()
+        return jsonify({
+            "buffer_cache_hit_ratio": hit_ratio,
+            "consistent_gets": stats.get('consistent gets from cache', 0),
+            "db_block_gets": stats.get('db block gets from cache', 0),
+            "physical_reads": reads,
+            "active_wait_events": wait_events,
+            "top_sql": top_sql
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     print(f"[*] Iniciando Dashboard Web de Oracle Banking Engine en http://localhost:{port}")

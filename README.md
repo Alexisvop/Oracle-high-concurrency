@@ -76,14 +76,88 @@
 
 Ejecutados con conexión nativa multihilo (`python-oracledb`) sobre **Oracle Database 23ai**:
 
-| Estrategia de Concurrencia | Concurrencia (Hilos) | Throughput (TPS) | Tasa de Éxito | Deadlocks (`ORA-60`) | Latencia p50 | Latencia p95 | Latencia p99 |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Pesimista Ordenado (Anti-DL)** | **25** | **413.8 tx/s** | **100.0%** | **0** | **50.3 ms** | **122.5 ms** | **142.3 ms** |
-| **Pesimista Ingenuo** | 20 | Variable | Fallos por colisión | **Generados activamente** | Alto | Alto | Alto |
-| **Optimista Versionado** | 25 | ~200 tx/s | Resuelto con retries | **0** | Con backoff | Con backoff | Con backoff |
-| **Cola SKIP LOCKED (Batch)** | 8 Workers | **> 1,000 items/s** | **100.0%** | **0** | **< 10 ms** | **< 25 ms** | **< 40 ms** |
+| Estrategia de Concurrencia | Concurrencia (Hilos) | Throughput (TPS) | Tasa de Éxito | Deadlocks (`ORA-60`) | Latencia p50 | Latencia p95 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Pesimista Ordenado (Anti-DL)** | **12** | **272.5 tx/s** | **100.0%** | **0** | **29.1 ms** | **79.0 ms** |
+| **Pesimista Ingenuo (Contención)** | 4 | 2.4 tx/s | 45.0% | **55% fallos / contención** | 2,013 ms | 2,153 ms |
+| **Optimista Versionado (MVCC)** | 12 | 2.7 tx/s | 95.0% | **0 (5 reintentos)** | 43.9 ms | 373.5 ms |
+| **Cola SKIP LOCKED (Batch)** | 4 Workers | **45.4 items/s** | **100.0%** | **0** | Instantáneo | Instantáneo |
 
-*(Gráficas visuales generadas automáticamente en `benchmark/results/`)*
+### 📈 Gráficas Estadísticas Generadas por el Motor
+
+| Comparativa de Percentiles de Latencia | Rendimiento Transaccional (Throughput) |
+| :---: | :---: |
+| ![Latencias Percentiles](benchmark/results/latency_comparison.png) | ![Throughput TPS](benchmark/results/throughput_comparison.png) |
+
+---
+
+## 🧠 Arquitectura de Memoria y Flujo Físico (Oracle SGA & PGA)
+
+```
+ [ Clientes Python / Web UI ]
+       │  (Conexión TCP :1521 / Protocolo SQL*Net)
+       ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │ PGA (Program Global Area) - Memoria Privada de Sesión                   │
+ │   • Variables de sesión de PKG_BANK_CORE                                │
+ │   • Stack space y punteros de cursores privados                        │
+ └────────────────────────────────────┬───────────────────────────────────┘
+                                      │
+                                      ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │ SGA (System Global Area) - Memoria Compartida                          │
+ │                                                                        │
+ │  ┌─────────────────────────────┐    ┌───────────────────────────────┐  │
+ │  │      SHARED POOL            │    │    DATABASE BUFFER CACHE      │  │
+ │  │  • Library Cache:           │    │  • Bloques de datos (8 KB)    │  │
+ │  │    Planes de ejecución CBO  │    │  • Cabeceras ITL (INITRANS 30)│  │
+ │  │  • Data Dictionary Cache:   │    │  • Dirty Blocks pendientes    │  │
+ │  │    Metadatos de esquemas    │    │    de escritura a disco       │  │
+ │  └──────────────┬──────────────┘    └──────────────┬────────────────┘  │
+ │                 │                                  │                   │
+ │                 └────────────────┬─────────────────┘                   │
+ │                                  ▼                                     │
+ │                     ┌───────────────────────────┐                      │
+ │                     │     REDO LOG BUFFER       │                      │
+ │                     │  Registros de cambios SCN │                      │
+ │                     └────────────┬──────────────┘                      │
+ └──────────────────────────────────┼─────────────────────────────────────┘
+                                    │
+               ┌────────────────────┴────────────────────┐
+               ▼                                         ▼
+      [ Proceso LGWR ]                          [ Proceso DBWn ]
+               │ (Escritura síncrona en COMMIT)          │ (Escritura asíncrona)
+               ▼                                         ▼
+       REDO LOG FILES (.log)                     DATAFILES (.dbf)
+```
+
+---
+
+## 🎯 Recursos Clave para Entrevistas Técnicas
+
+* 📘 **[Interview Defense Guide (`docs/INTERVIEW_DEFENSE_GUIDE.md`)](docs/INTERVIEW_DEFENSE_GUIDE.md):** 10 preguntas y respuestas de alto nivel sobre bloqueos de fila, ITL, wait events, mutating tables y CBO.
+* 📗 **[Guía de Arquitectura ACID (`docs/ARCHITECTURE.md`)](docs/ARCHITECTURE.md):** Demostración formal de la prevención de deadlocks y ordenamiento de recursos.
+* 📙 **[Guía de Tuning y CBO (`docs/TUNING_GUIDE.md`)](docs/TUNING_GUIDE.md):** Análisis de costo I/O, Function-Based Indexes y planes de ejecución.
+
+---
+
+## 🧪 Pruebas Unitarias Automatizadas de Invariantes
+
+El proyecto cuenta con una suite de pruebas unitarias automatizadas que valida la integridad transaccional y el cumplimiento estricto de las reglas de negocio:
+
+```bash
+# Ejecutar suite de pruebas unitarias
+./benchmark/venv/bin/python3 -m unittest tests/test_banking_invariants.py
+```
+
+Pruebas cubiertas:
+* ✅ Happy path de transferencia pesimista con verificación de saldos.
+* ✅ Rechazo automático de sobregiro por saldo insuficiente.
+* ✅ Rechazo de transferencias hacia la misma cuenta.
+* ✅ Incremento atómico de `version_id` en concurrencia optimista.
+* ✅ Persistencia obligatoria de `SYSTEM_AUDIT_LOG` tras `ROLLBACK` de la transacción padre (`PRAGMA AUTONOMOUS_TRANSACTION`).
+* ✅ Invariante de saldo no negativo mediante restricción de integridad `CHECK (balance >= 0)`.
+* ✅ Determinismo y categorización de clientes con `PKG_BANK_CORE.fn_calculate_tier`.
 
 ---
 
