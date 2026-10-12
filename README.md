@@ -87,45 +87,28 @@ Ejecutados con conexión nativa multihilo (`python-oracledb`) sobre **Oracle Dat
 
 ---
 
-## 🚀 Guía de Despliegue Rápido
+## 🚀 Guía de Ejecución (2 Modos Disponibles)
 
-### Requisitos
-* Docker y Docker Compose
-* Python 3.10+
+El proyecto ofrece dos métodos independientes de ejecución según tu preferencia:
 
-### 1. Levantar Oracle Database en Docker
+### 🌟 Opción A: Interfaz Gráfica Web Interactiva (`run_gui.sh`)
+Para presentaciones en vivo, demos interactivas y visualización reactiva con gráficos:
 ```bash
-docker-compose up -d
+./run_gui.sh
 ```
-El contenedor inicializará Oracle 23ai Free en el puerto `1521` con la base de datos `FREEPDB1`.
+* **Acciones automáticas:** Levanta Oracle Database, compila los componentes si es necesario, inicia el servidor web en `http://localhost:5000` y **abre tu navegador predeterminado automáticamente**.
+* **Funcionalidades de la UI:**
+  * Consola interactiva para disparar transferencias individuales eligiendo estrategias de bloqueo y viendo latencias en milisegundos.
+  * Generador de carga y estrés con selectores de hilos y transacciones, actualizando gráficos de Chart.js en tiempo real.
+  * Inspector en vivo de tablas de auditoría (`SYSTEM_AUDIT_LOG`), histórico (`TRANSACTIONS_LOG`) y cuentas.
+  * Comparador visual del Optimizador Basado en Costos (CBO) y planes de ejecución.
 
-### 2. Desplegar Esquema, Packages y Semillas
+### ⚙️ Opción B: Automatización Completa por Terminal / CLI (`run_all.sh`)
+Para ejecución desatendida, pipelines CI/CD o entornos sin servidor gráfico:
 ```bash
-# Crear esquema DDL e invariantes
-docker exec -i oracle-bank-db sqlplus -s BANK_USER/BankUserPassword123#@localhost:1521/FREEPDB1 < database/02_schema_ddl.sql
-
-# Sembrar 10,000 cuentas bancarias y recolectar estadísticas CBO
-docker exec -i oracle-bank-db sqlplus -s BANK_USER/BankUserPassword123#@localhost:1521/FREEPDB1 < database/03_seed_data.sql
-
-# Compilar Especificación y Cuerpo del Package PL/SQL + Triggers
-docker exec -i oracle-bank-db sqlplus -s BANK_USER/BankUserPassword123#@localhost:1521/FREEPDB1 < database/04_packages_spec.sql
-docker exec -i oracle-bank-db sqlplus -s BANK_USER/BankUserPassword123#@localhost:1521/FREEPDB1 < database/05_packages_body.sql
-
-# Ejecutar análisis de Tuning y Planes de Ejecución
-docker exec -i oracle-bank-db sqlplus -s BANK_USER/BankUserPassword123#@localhost:1521/FREEPDB1 < database/06_tuning_and_plans.sql
+./run_all.sh
 ```
-
-### 3. Ejecutar la Suite de Estrés y Benchmarking
-```bash
-# Activar entorno virtual
-source benchmark/venv/bin/activate
-
-# Ejecutar benchmark completo
-python benchmark/stress_test.py --mode all --txs 300 --concurrency 25 --hotspots 8
-
-# Generar gráficas comparativas PNG
-python benchmark/generate_report.py
-```
+* Ejecuta secuencialmente el levantamiento del contenedor, la creación de DDL, la siembra masiva de 10,000 cuentas, la compilación de packages PL/SQL, el análisis de planes `DBMS_XPLAN` y la suite de benchmarks multihilo con generación de imágenes PNG en `benchmark/results/`.
 
 ---
 
@@ -134,7 +117,12 @@ python benchmark/generate_report.py
 ```text
 .
 ├── docker-compose.yml              # Orquestación de Oracle Database 23ai Free
+├── run_all.sh                      # Modo 1: Automatización completa por CLI
+├── run_gui.sh                      # Modo 2: Interfaz Gráfica Web Interactiva
 ├── README.md                       # Documentación principal del proyecto
+├── ui/                             # Dashboard y Servidor Web interactivo
+│   ├── app.py                      # Backend API REST en Flask
+│   └── templates/index.html        # Frontend interactivo (Tailwind CSS, Chart.js)
 ├── database/                       # Scripts SQL y PL/SQL nativos
 │   ├── 01_setup_user.sql           # Configuración de roles y privilegios de sistema
 │   ├── 02_schema_ddl.sql           # Tablas, constraints, checks e invariantes ACID
@@ -143,7 +131,7 @@ python benchmark/generate_report.py
 │   ├── 05_packages_body.sql        # Implementación de bloqueos, triggers y UDF
 │   └── 06_tuning_and_plans.sql     # Demostración de EXPLAIN PLAN y análisis de I/O
 ├── benchmark/                      # Suite de estrés y análisis de rendimiento
-│   ├── requirements.txt            # Dependencias Python (oracledb, matplotlib, pandas)
+│   ├── requirements.txt            # Dependencias Python (oracledb, flask, matplotlib)
 │   ├── stress_test.py              # Runner multihilo de contención extrema
 │   ├── generate_report.py          # Generador de gráficos de latencia y throughput
 │   └── results/                    # Gráficas PNG y resumen JSON

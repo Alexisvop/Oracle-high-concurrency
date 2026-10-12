@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oracle Database 23ai - Banking Transaction Engine & Tuning</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#f80000',
+              dark: '#0f172a',
+              card: '#1e293b',
+              accent: '#38bdf8',
+              emerald: '#10b981'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center font-bold text-red-500 text-xl tracking-wider">
+          ORA
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            Oracle Banking Engine
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">23ai Free</span>
+          </h1>
+          <p class="text-xs text-slate-400">Motor Transaccional ACID, Prevención de Deadlocks y Tuning CBO</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <div id="statusBadge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="statusText" class="text-slate-300 font-medium">Verificando motor...</span>
+        </div>
+        <button onclick="refreshDashboard()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" title="Refrescar">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- KPI Metric Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Cuentas Activas</p>
+          <h3 id="statAccounts" class="text-2xl font-bold text-white mt-1">--</h3>
+          <p class="text-xs text-emerald-400 mt-0.5">Ingesta masiva FORALL</p>
+        </div>
+        <div class="w-11 h-11 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Liquidez Total</p>
+          <h3 id="statLiquidity" class="text-2xl font-bold text-white mt-1">--</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Moneda: USD</p>
+        </div>
+        <div class="w-11 h-11 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Transacciones en Ledger</p>
+          <h3 id="statTxCount" class="text-2xl font-bold text-white mt-1">--</h3>
+          <p class="text-xs text-sky-400 mt-0.5">Histórico ACID</p>
+        </div>
+        <div class="w-11 h-11 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+          <i data-lucide="activity" class="w-5 h-5"></i>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Eventos de Auditoría</p>
+          <h3 id="statAudit" class="text-2xl font-bold text-white mt-1">--</h3>
+          <p class="text-xs text-amber-400 mt-0.5">PRAGMA AUTONOMOUS</p>
+        </div>
+        <div class="w-11 h-11 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+          <i data-lucide="shield-alert" class="w-5 h-5"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Tabs / Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT COLUMN: Interactive Transfer & Stress Benchmark (7 cols) -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- Panel 1: Transferencia Interactiva en Vivo -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div>
+              <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                <i data-lucide="send" class="w-4 h-4 text-sky-400"></i>
+                Consola Transaccional Interactiva
+              </h2>
+              <p class="text-xs text-slate-400">Prueba individual de estrategias de bloqueo y validación de invariantes</p>
+            </div>
+            <span class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-300 font-mono">PKG_BANK_CORE</span>
+          </div>
+
+          <form id="transferForm" onsubmit="handleTransferSubmit(event)" class="mt-4 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Cuenta Origen (ID)</label>
+                <input type="number" id="txSource" value="1" min="1" max="10000" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Cuenta Destino (ID)</label>
+                <input type="number" id="txDest" value="2" min="1" max="10000" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Monto ($ USD)</label>
+                <input type="number" id="txAmount" value="250.00" step="0.01" min="1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Estrategia de Control de Concurrencia</label>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <label class="flex items-center space-x-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 cursor-pointer hover:border-slate-700">
+                  <input type="radio" name="txStrat" value="ORDERED" checked class="text-sky-500 focus:ring-0">
+                  <div class="text-xs">
+                    <p class="font-medium text-white">Pesimista Ordenado</p>
+                    <p class="text-[10px] text-emerald-400">Anti-Deadlock (Canónico)</p>
+                  </div>
+                </label>
+
+                <label class="flex items-center space-x-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 cursor-pointer hover:border-slate-700">
+                  <input type="radio" name="txStrat" value="OPTIMISTIC" class="text-sky-500 focus:ring-0">
+                  <div class="text-xs">
+                    <p class="font-medium text-white">Optimista Versionado</p>
+                    <p class="text-[10px] text-sky-400">MVCC + Version ID</p>
+                  </div>
+                </label>
+
+                <label class="flex items-center space-x-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 cursor-pointer hover:border-slate-700">
+                  <input type="radio" name="txStrat" value="NAIVE" class="text-sky-500 focus:ring-0">
+                  <div class="text-xs">
+                    <p class="font-medium text-white">Pesimista Ingenuo</p>
+                    <p class="text-[10px] text-red-400">Simulador de ORA-60</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2">
+              <button type="submit" id="btnExecuteTx" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-sky-600/20">
+                <i data-lucide="play" class="w-4 h-4"></i>
+                Ejecutar Transacción
+              </button>
+
+              <div id="txResultBox" class="hidden text-xs px-3 py-1.5 rounded-lg border flex items-center gap-2"></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Panel 2: Suite de Benchmarking de Estrés Concurrentes -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div>
+              <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+                Generador de Estrés y Contención Multihilo
+              </h2>
+              <p class="text-xs text-slate-400">Simula cientos de transacciones simultáneas para evaluar TPS y latencias</p>
+            </div>
+            <span class="text-xs px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-mono">python-oracledb Pool</span>
+          </div>
+
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Transacciones</label>
+              <select id="bmTxs" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                <option value="50">50 Transacciones (Rápido)</option>
+                <option value="100" selected>100 Transacciones (Estándar)</option>
+                <option value="250">250 Transacciones (Pesado)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Concurrencia (Hilos)</label>
+              <select id="bmConcurrency" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                <option value="5">5 Workers Concurrentes</option>
+                <option value="12" selected>12 Workers Concurrentes</option>
+                <option value="20">20 Workers Concurrentes</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Cuentas en Contención</label>
+              <select id="bmHotspots" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                <option value="3">3 Cuentas (Contención Crítica)</option>
+                <option value="5" selected>5 Cuentas (Alta Contención)</option>
+                <option value="10">10 Cuentas (Media Contención)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <label class="text-xs text-slate-400">Estrategias a evaluar:</label>
+              <select id="bmMode" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white">
+                <option value="all">Todas (Comparativa Integral)</option>
+                <option value="ordered">Solo Pesimista Ordenado</option>
+                <option value="naive">Solo Pesimista Ingenuo</option>
+                <option value="optimistic">Solo Optimista Versionado</option>
+                <option value="queue">Solo Cola SKIP LOCKED</option>
+              </select>
+            </div>
+
+            <button onclick="launchBenchmark()" id="btnRunBenchmark" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-amber-600/20">
+              <i data-lucide="gauge" class="w-4 h-4"></i>
+              Lanzar Benchmark de Estrés
+            </button>
+          </div>
+
+          <!-- Spinner & Progress -->
+          <div id="bmSpinner" class="hidden mt-4 p-4 rounded-lg bg-slate-950 border border-slate-800 text-center space-y-2">
+            <div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-amber-500 border-t-transparent"></div>
+            <p class="text-xs text-amber-400 font-medium">Ejecutando simulación de carga concurrente en Oracle Database...</p>
+            <p class="text-[11px] text-slate-500">Midiendo latencias de encolado, bloqueos de fila y colisiones SCN.</p>
+          </div>
+
+          <!-- Gráficos de Resultados -->
+          <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <h4 class="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                <span>Throughput Transaccional (TPS)</span>
+                <span class="text-[10px] text-emerald-400">Mayor es mejor</span>
+              </h4>
+              <div class="h-48">
+                <canvas id="chartTPS"></canvas>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <h4 class="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between">
+                <span>Latencias Percentiles (p50 / p95)</span>
+                <span class="text-[10px] text-sky-400">Milisegundos (Menor es mejor)</span>
+              </h4>
+              <div class="h-48">
+                <canvas id="chartLatency"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: CBO Tuning & Live Motor Inspection (5 cols) -->
+      <div class="lg:col-span-5 space-y-6">
+
+        <!-- Panel 3: Optimizador CBO & Planes de Ejecución -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                <i data-lucide="cpu" class="w-4 h-4 text-purple-400"></i>
+                Tuning CBO & EXPLAIN PLAN
+              </h2>
+              <p class="text-xs text-slate-400">Optimizador Basado en Costos de Oracle</p>
+            </div>
+            <span class="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 font-mono">DBMS_XPLAN</span>
+          </div>
+
+          <div class="mt-4 space-y-3">
+            <!-- Caso 1 -->
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="font-semibold text-white">Caso 1: Filtro con Función (UPPER)</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">-97% I/O Cost</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mb-2">Búsqueda insensible a mayúsculas sobre correo del titular.</p>
+              
+              <div class="grid grid-cols-2 gap-2 text-center text-xs">
+                <div class="p-2 rounded bg-red-950/40 border border-red-900/40">
+                  <p class="text-[10px] text-red-400 uppercase font-mono">Sin FBI (FTS)</p>
+                  <p class="text-base font-bold text-red-200">Cost: 68</p>
+                  <p class="text-[10px] text-slate-400">TABLE ACCESS FULL</p>
+                </div>
+                <div class="p-2 rounded bg-emerald-950/40 border border-emerald-900/40">
+                  <p class="text-[10px] text-emerald-400 uppercase font-mono">Con FBI</p>
+                  <p class="text-base font-bold text-emerald-200">Cost: 2</p>
+                  <p class="text-[10px] text-slate-400">INDEX RANGE SCAN</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Caso 2 -->
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="font-semibold text-white">Caso 2: Índice Compuesto Estratégico</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-400">PGA Zero Sort</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mb-2">Consulta por `(source_id, status, created_at DESC)`.</p>
+              <div class="p-2 rounded bg-slate-900 border border-slate-800 text-xs">
+                <p class="text-slate-300 text-[11px]">
+                  ✓ Eliminó completamente el paso <span class="font-mono text-amber-400">SORT ORDER BY</span>.<br>
+                  ✓ Acceso ordenado nativo en las hojas del árbol B.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 4: Auditoría Persistente & Ledger en Vivo -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <button onclick="switchInspectorTab('txs')" id="tabBtnTxs" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white">Últimas Transacciones</button>
+              <button onclick="switchInspectorTab('audit')" id="tabBtnAudit" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white">Auditoría Autónoma</button>
+              <button onclick="switchInspectorTab('accounts')" id="tabBtnAccounts" class="text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white">Cuentas</button>
+            </div>
+            <button onclick="loadInspectorData()" class="text-slate-400 hover:text-white text-xs">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <div id="inspectorContent" class="mt-3 overflow-x-auto max-h-72 text-xs">
+            <!-- Dynamic Content -->
+            <div class="text-slate-500 text-center py-8">Cargando registros del motor...</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Script Lógica Frontend -->
+  <script>
+    let tpsChart = null;
+    let latencyChart = null;
+    let currentTab = 'txs';
+
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      initCharts();
+      refreshDashboard();
+      setInterval(refreshStatusOnly, 8000);
+    });
+
+    function initCharts() {
+      const ctxTPS = document.getElementById('chartTPS').getContext('2d');
+      tpsChart = new Chart(ctxTPS, {
+        type: 'bar',
+        data: {
+          labels: ['Pesimista', 'Ingenuo', 'Optimista', 'SKIP LOCKED'],
+          datasets: [{
+            label: 'TPS',
+            data: [272.5, 2.4, 2.6, 45.4],
+            backgroundColor: ['#10b981', '#ef4444', '#38bdf8', '#a855f7'],
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+          }
+        }
+      });
+
+      const ctxLat = document.getElementById('chartLatency').getContext('2d');
+      latencyChart = new Chart(ctxLat, {
+        type: 'bar',
+        data: {
+          labels: ['Pesimista', 'Optimista'],
+          datasets: [
+            { label: 'p50 (ms)', data: [29.1, 43.9], backgroundColor: '#38bdf8', borderRadius: 4 },
+            { label: 'p95 (ms)', data: [79.0, 373.5], backgroundColor: '#f59e0b', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } } },
+          scales: {
+            y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+          }
+        }
+      });
+    }
+
+    async function refreshStatusOnly() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        if (data.status === 'ONLINE') {
+          document.getElementById('statusText').innerText = "Oracle DB 23ai: ONLINE";
+          document.getElementById('statAccounts').innerText = Number(data.total_accounts).toLocaleString();
+          document.getElementById('statLiquidity').innerText = '$' + Number(data.total_liquidity).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+          document.getElementById('statTxCount').innerText = Number(data.total_transactions).toLocaleString();
+          document.getElementById('statAudit').innerText = Number(data.total_audit_events).toLocaleString();
+        }
+      } catch (e) {
+        document.getElementById('statusText').innerText = "Oracle DB: DESCONECTADO";
+      }
+    }
+
+    async function refreshDashboard() {
+      await refreshStatusOnly();
+      await loadInspectorData();
+    }
+
+    async function handleTransferSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnExecuteTx');
+      const box = document.getElementById('txResultBox');
+      
+      btn.disabled = true;
+      btn.innerHTML = `<span class="animate-spin mr-2">⏳</span> Procesando...`;
+
+      const payload = {
+        source_id: document.getElementById('txSource').value,
+        dest_id: document.getElementById('txDest').value,
+        amount: document.getElementById('txAmount').value,
+        strategy: document.querySelector('input[name="txStrat"]:checked').value
+      };
+
+      try {
+        const res = await fetch('/api/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        box.classList.remove('hidden', 'bg-emerald-950/60', 'border-emerald-600', 'text-emerald-300', 'bg-red-950/60', 'border-red-600', 'text-red-300');
+        if (data.success) {
+          box.classList.add('bg-emerald-950/60', 'border-emerald-600', 'text-emerald-300');
+          box.innerHTML = `✓ ${data.status_code}: ${data.message} (${data.execution_time_ms} ms)`;
+        } else {
+          box.classList.add('bg-red-950/60', 'border-red-600', 'text-red-300');
+          box.innerHTML = `✗ ${data.status_code}: ${data.message}`;
+        }
+        refreshDashboard();
+      } catch (err) {
+        box.classList.remove('hidden');
+        box.classList.add('bg-red-950/60', 'border-red-600', 'text-red-300');
+        box.innerHTML = `Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="play" class="w-4 h-4"></i> Ejecutar Transacción`;
+        lucide.createIcons();
+      }
+    }
+
+    async function launchBenchmark() {
+      const btn = document.getElementById('btnRunBenchmark');
+      const spinner = document.getElementById('bmSpinner');
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+
+      const payload = {
+        mode: document.getElementById('bmMode').value,
+        txs: parseInt(document.getElementById('bmTxs').value),
+        concurrency: parseInt(document.getElementById('bmConcurrency').value),
+        hotspots: parseInt(document.getElementById('bmHotspots').value)
+      };
+
+      try {
+        const res = await fetch('/api/benchmark', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const results = await res.json();
+
+        // Actualizar gráficos
+        const tpsLabels = [];
+        const tpsVals = [];
+        const latLabels = [];
+        const p50Vals = [];
+        const p95Vals = [];
+
+        if (results.pessimistic_ordered) {
+          tpsLabels.push('Pesimista');
+          tpsVals.push(results.pessimistic_ordered.tps);
+          latLabels.push('Pesimista');
+          p50Vals.push(results.pessimistic_ordered.p50_latency_ms);
+          p95Vals.push(results.pessimistic_ordered.p95_latency_ms);
+        }
+        if (results.pessimistic_naive) {
+          tpsLabels.push('Ingenuo');
+          tpsVals.push(results.pessimistic_naive.tps);
+        }
+        if (results.optimistic) {
+          tpsLabels.push('Optimista');
+          tpsVals.push(results.optimistic.tps);
+          latLabels.push('Optimista');
+          p50Vals.push(results.optimistic.p50_latency_ms);
+          p95Vals.push(results.optimistic.p95_latency_ms);
+        }
+        if (results.queue_skip_locked) {
+          tpsLabels.push('SKIP LOCKED');
+          tpsVals.push(results.queue_skip_locked.tps);
+        }
+
+        tpsChart.data.labels = tpsLabels;
+        tpsChart.data.datasets[0].data = tpsVals;
+        tpsChart.update();
+
+        latencyChart.data.labels = latLabels;
+        latencyChart.data.datasets[0].data = p50Vals;
+        latencyChart.data.datasets[1].data = p95Vals;
+        latencyChart.update();
+
+        refreshDashboard();
+      } catch (err) {
+        alert("Error ejecutando benchmark: " + err.message);
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+      }
+    }
+
+    function switchInspectorTab(tab) {
+      currentTab = tab;
+      const bTxs = document.getElementById('tabBtnTxs');
+      const bAudit = document.getElementById('tabBtnAudit');
+      const bAcc = document.getElementById('tabBtnAccounts');
+
+      bTxs.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
+      bAudit.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
+      bAcc.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-slate-800 text-slate-400 hover:text-white";
+
+      if (tab === 'txs') bTxs.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white";
+      if (tab === 'audit') bAudit.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white";
+      if (tab === 'accounts') bAcc.className = "text-xs px-2.5 py-1 rounded-lg font-semibold bg-sky-600 text-white";
+
+      loadInspectorData();
+    }
+
+    async function loadInspectorData() {
+      const container = document.getElementById('inspectorContent');
+      try {
+        if (currentTab === 'txs') {
+          const res = await fetch('/api/transactions');
+          const data = await res.json();
+          if (!data.length) {
+            container.innerHTML = `<p class="text-slate-500 text-center py-4">No hay transacciones registradas.</p>`;
+            return;
+          }
+          let html = `<table class="w-full text-left font-mono">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-800">
+                <th class="pb-1">ID</th><th class="pb-1">Src</th><th class="pb-1">Dst</th><th class="pb-1">Monto</th><th class="pb-1">Estrategia</th><th class="pb-1">Estado</th><th class="pb-1">ms</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">`;
+          data.forEach(r => {
+            const stColor = r.status === 'COMMITTED' ? 'text-emerald-400' : 'text-red-400';
+            html += `<tr>
+              <td class="py-1 text-slate-400">${r.id}</td>
+              <td class="py-1">${r.source_id}</td>
+              <td class="py-1">${r.dest_id}</td>
+              <td class="py-1 text-slate-200">$${Number(r.amount).toFixed(2)}</td>
+              <td class="py-1 text-slate-400 text-[10px]">${r.strategy}</td>
+              <td class="py-1 ${stColor}">${r.status}</td>
+              <td class="py-1 text-slate-400">${r.time_ms ? Number(r.time_ms).toFixed(1) : '-'}</td>
+            </tr>`;
+          });
+          html += `</tbody></table>`;
+          container.innerHTML = html;
+
+        } else if (currentTab === 'audit') {
+          const res = await fetch('/api/audit');
+          const data = await res.json();
+          if (!data.length) {
+            container.innerHTML = `<p class="text-slate-500 text-center py-4">No hay eventos de auditoría autónoma.</p>`;
+            return;
+          }
+          let html = `<table class="w-full text-left font-mono">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-800">
+                <th class="pb-1">ID</th><th class="pb-1">Evento</th><th class="pb-1">Severidad</th><th class="pb-1">ORA Code</th><th class="pb-1">Detalle</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">`;
+          data.forEach(r => {
+            const sevColor = r.severity === 'CRITICAL' ? 'text-red-400 font-bold' : (r.severity === 'WARN' ? 'text-amber-400' : 'text-slate-300');
+            html += `<tr>
+              <td class="py-1 text-slate-400">${r.id}</td>
+              <td class="py-1 text-slate-200">${r.event}</td>
+              <td class="py-1 ${sevColor}">${r.severity}</td>
+              <td class="py-1 text-amber-400">${r.ora_code || '-'}</td>
+              <td class="py-1 text-slate-400 text-[10px] truncate max-w-xs" title="${r.detail || ''}">${r.detail || '-'}</td>
+            </tr>`;
+          });
+          html += `</tbody></table>`;
+          container.innerHTML = html;
+
+        } else if (currentTab === 'accounts') {
+          const res = await fetch('/api/accounts');
+          const data = await res.json();
+          let html = `<table class="w-full text-left font-mono">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-800">
+                <th class="pb-1">ID</th><th class="pb-1">Titular</th><th class="pb-1">Saldo</th><th class="pb-1">Tier (UDF)</th><th class="pb-1">Versión</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">`;
+          data.forEach(r => {
+            html += `<tr>
+              <td class="py-1 text-slate-400">${r.id}</td>
+              <td class="py-1 text-slate-300">${r.holder_name}</td>
+              <td class="py-1 text-emerald-400 font-bold">$${Number(r.balance).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+              <td class="py-1 text-sky-400">${r.tier}</td>
+              <td class="py-1 text-slate-400">v${r.version_id}</td>
+            </tr>`;
+          });
+          html += `</tbody></table>`;
+          container.innerHTML = html;
+        }
+      } catch (e) {
+        container.innerHTML = `<p class="text-red-400 text-center py-4">Error cargando datos: ${e.message}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
